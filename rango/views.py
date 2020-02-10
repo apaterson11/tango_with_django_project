@@ -7,6 +7,14 @@ from rango.forms import CategoryForm
 from django.shortcuts import redirect
 from rango.forms import PageForm
 from django.urls import reverse
+from rango.forms import UserForm, UserProfileForm
+from django.contrib.auth import authenticate, login, logout
+from django.http import HttpResponse
+from django.urls import reverse
+from django.shortcuts import redirect
+from django.contrib.auth.decorators import login_required
+
+
 
 def index(request):
     category_list = Category.objects.order_by('-likes')[:5] #retrieve top 5 categories by the number of likes in descending order
@@ -29,6 +37,7 @@ def about(request):
     # Note that the first parameter is the template we wish to use.
     return render(request, 'rango/about.html', context=context_dict)#
     
+@login_required
 def add_category(request):
     form = CategoryForm()
     
@@ -45,7 +54,6 @@ def add_category(request):
 
 def show_category(request, category_name_slug):
     context_dict = {} #create a context dictionary whch we can pass to the template rendering engine
-    
     try: #attempt to find a category name slug with the given name
         category = Category.objects.get(slug=category_name_slug)
         
@@ -59,7 +67,8 @@ def show_category(request, category_name_slug):
         context_dict['pages'] = None
     
     return render(request, 'rango/category.html', context=context_dict)
-    
+   
+@login_required
 def add_page(request, category_name_slug):
         try:
             category = Category.objects.get(slug=category_name_slug)
@@ -87,3 +96,68 @@ def add_page(request, category_name_slug):
                 print(form.errors)
         context_dict = {'form': form, 'category': category}
         return render(request, 'rango/add_page.html', context=context_dict)
+        
+def register(request):
+    registered = False
+    
+    if request.method == 'POST':
+        user_form = UserForm(request.POST)
+        profile_form = UserProfileForm(request.POST)
+        
+        if user_form.is_valid() and profile_form.is_valid():
+            user = user_form.save()
+            user.set_password(user.password)
+            user.save()
+            
+            profile = profile_form.save(commit=False)
+            profile.user = user
+            
+            if 'picture' in request.FILES:
+                profile.picture = request.FILES['picture']
+                
+            profile.save()
+            
+            registered = True
+        else:
+            print(user_form.errors, profile_form.errors)
+    else:
+        user_form = UserForm()
+        profile_form = UserProfileForm()
+        
+    return render(request, 'rango/register.html', context = {'user_form': user_form, 'profile_form': profile_form, 'registered': registered})
+    
+def user_login(request):
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        
+        user = authenticate(username=username, password=password)
+        
+        if user:
+            if user.is_active:
+                # If the account is valid and active, we can log the user in.
+                # We'll send the user back to the homepage.
+                login(request,user)
+                return redirect(reverse('rango:index'))
+            else:
+                # An inactive account was used - no logging in!
+                return HttpResponse("Your Rango account is disabled.")
+        else:
+            # Bad login details were provided. So we can't log the user in.
+            print(f"Invalid login details: {username}, {password}")
+            return HttpResponse("Invalid login details supplied.")
+       
+    # The request is not a HTTP POST, so display the login form
+    else:
+        return render(request, 'rango/login.html')
+        
+@login_required
+def restricted(request):
+    return render(request, 'rango/restricted.html')
+
+@login_required
+def user_logout(request):
+    # Since we know the user is logged in, we can now just log them out.
+    logout(request)
+    # Take the user back to the homepage.
+    return redirect(reverse('rango:index'))
