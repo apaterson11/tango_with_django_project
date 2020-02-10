@@ -75,7 +75,6 @@ class Chapter10SessionPersistenceTests(TestCase):
 
             session['last_visit'] = str(last_visit)
             session.save()
-
             self.assertEquals(session['visits'], i+1)
 
 class Chapter10ViewTests(TestCase):
